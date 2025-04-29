@@ -1,0 +1,97 @@
+name: Passo 4 # Fazer merge do seu pull request
+
+# Verifica se o aprendiz completou as tarefas para o passo 4.
+# - Dispara quando o usuário faz merge do pull request.
+# - Se todas as verificações passarem, o workflow é desativado para não ser executado novamente. Assim, o selo de status do workflow mudará para verde.
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+
+env:
+  REVIEW_FILE: ".github/steps/x-review.md"
+
+jobs:
+  find_exercise:
+    name: Encontrar Issue do Exercício
+    uses: dev-pods/exercise-toolkit/.github/workflows/find-exercise-issue.yml@v0.1.0
+
+  check_step_work:
+    name: Verificar trabalho do passo
+    needs: find_exercise
+    runs-on: ubuntu-latest
+    if: |
+      !github.event.repository.is_template &&
+      github.head_ref == 'my-first-branch' &&
+      github.event.pull_request.merged == true
+    env:
+      ISSUE_URL: ${{ needs.find_exercise.outputs.issue-url }}
+
+    steps:
+      - name: Obter modelos de resposta
+        uses: actions/checkout@v4
+        with:
+          repository: dev-pods/exercise-toolkit
+          path: exercise-toolkit
+          ref: v0.1.0
+
+      - name: Nada para verificar
+        run: echo "O workflow foi acionado, então passou."
+
+      - name: Atualizar comentário - passo finalizado - revisão final a seguir
+        run: |
+          gh issue comment "$ISSUE_URL" \
+            --body-file exercise-toolkit/markdown-templates/step-feedback/lesson-review.md \
+            --edit-last
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  post_review_content:
+    name: Publicar conteúdo de revisão
+    needs: [find_exercise, check_step_work]
+    runs-on: ubuntu-latest
+    if: |
+      !github.event.repository.is_template
+    env:
+      ISSUE_URL: ${{ needs.find_exercise.outputs.issue-url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Criar comentário - adicionar conteúdo de revisão
+        run: |
+          gh issue comment "$ISSUE_URL" \
+            --body-file ${{ env.REVIEW_FILE }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  finish_exercise:
+    name: Finalizar Exercício
+    needs: [find_exercise, post_review_content]
+    uses: dev-pods/exercise-toolkit/.github/workflows/finish-exercise.yml@v0.1.0
+    with:
+      issue-url: ${{ needs.find_exercise.outputs.issue-url }}
+
+
+  disable_workflow:
+    name: Desativar este workflow
+    needs: [find_exercise, post_review_content]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Desativar workflow atual
+        run: gh workflow disable "${{github.workflow}}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

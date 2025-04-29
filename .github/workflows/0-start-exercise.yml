@@ -1,0 +1,64 @@
+name: Passo 0 # Iniciar Exercício
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write # Atualizar Readme
+  actions: write # Desativar/ativar workflows
+  issues: write # Criar issue e comentar em issues
+
+
+env:
+  STEP_1_FILE: ".github/steps/1-create-a-branch.md"
+
+jobs:
+  start_exercise:
+    if: |
+      !github.event.repository.is_template
+    name: Iniciar Exercício
+    uses: dev-pods/exercise-toolkit/.github/workflows/start-exercise.yml@v0.1.0
+    with:
+      exercise-title: "Introdução ao GitHub"
+      intro-message: "Se você é novo no GitHub, você pode perceber que seus colegas desenvolvedores usam ___**issues**___ para organizar seu trabalho e colaborar. Nós faremos o mesmo! Isso é outra lição, mas hoje, vamos apresentar a você os conceitos básicos."
+
+
+  post_next_step_content:
+    name: Publicar conteúdo do próximo passo
+    runs-on: ubuntu-latest
+    needs: [start_exercise]
+    env:
+      ISSUE_URL: ${{ needs.start_exercise.outputs.issue-url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Obter modelos de resposta
+        uses: actions/checkout@v4
+        with:
+          repository: dev-pods/exercise-toolkit
+          path: exercise-toolkit
+          ref: v0.1.0
+
+      - name: Criar comentário - adicionar conteúdo do passo
+        run: |
+          gh issue comment "$ISSUE_URL" \
+            --body-file ${{ env.STEP_1_FILE }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Criar comentário - observando o progresso
+        run: |
+          gh issue comment "$ISSUE_URL" \
+            --body-file exercise-toolkit/markdown-templates/step-feedback/watching-for-progress.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Desativar workflow atual e ativar o próximo
+        run: |
+          gh workflow enable "Passo 1"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
